@@ -1,0 +1,27 @@
+[Unit]
+# Serviço de usuário que escuta o botão Nitro físico e executa o nitro-menu.sh.
+# Inicia automaticamente junto com a sessão gráfica do usuário.
+#
+# Instalação:
+#   cp nitro-key.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable nitro-key
+#   systemctl --user start nitro-key
+#
+# Comandos úteis:
+#   systemctl --user status nitro-key
+#   journalctl --user -u nitro-key -f
+Description=Nitro Key Listener — Acer Nitro 5 (AN517-52)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+# nitro-listener.py monitora /dev/input/event4, keycode 425
+ExecStart=/usr/bin/python3 %h/nitro-key/nitro-listener.py
+Restart=on-failure
+RestartSec=3
+Environment=DISPLAY=:0
+
+[Install]
+WantedBy=graphical-session.target
