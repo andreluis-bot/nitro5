@@ -1,0 +1,13 @@
+[Unit]
+Description=Nitro Fan Silent Daemon — controle térmico silencioso (AN517-52)
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/home/andre/nitro-key/nitro-fan-daemon.sh
+ExecStop=/bin/bash -c '/home/andre/nitro-key/ec_probe write 0x22 0x00; /home/andre/nitro-key/ec_probe write 0x21 0x00; /home/andre/nitro-key/ec_probe write 0x03 0x00'
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

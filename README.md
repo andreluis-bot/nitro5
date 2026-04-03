@@ -28,16 +28,42 @@ O script faz tudo automaticamente:
 
 ## O que faz
 
-Cada pressionamento do botão Nitro cicla entre 3 perfis:
+Cada pressionamento do botão Nitro cicla entre **5 perfis**:
 
-| Toque | Perfil CPU | Ventoinha |
-|---|---|---|
-| 1º | 🚀 **Performance** | Turbo — velocidade máxima |
-| 2º | ⚖ **Balanceado** | Média — metade da velocidade máxima |
-| 3º | 🍃 **Economia** | Automático — BIOS controla pela temperatura |
+| Toque | Perfil | CPU | Ventoinha |
+|---|---|---|---|
+| 1º | 🔇 **Silencioso** | 900 MHz (power-saver) | Desligada até 65°C, depois BIOS |
+| 2º | 🔇+ **Silencioso+** | 800–3800 MHz (balanced) | Desligada até 70°C, depois BIOS |
+| 3º | 🚀 **Performance** | 4200+ MHz | Turbo — velocidade máxima |
+| 4º | ⚖ **Balanceado** | 800–3800 MHz | Média — metade da velocidade máxima |
+| 5º | 🍃 **Economia** | 900 MHz | Automático — BIOS controla pela temperatura |
 
 Um OSD aparece no centro-topo da tela por **1.2 segundos** ao trocar de modo,  
 sobreposto a qualquer janela inclusive em tela cheia.
+
+### Modos silenciosos com controle térmico
+
+Os modos **Silencioso** e **Silencioso+** usam um daemon (`nitro-fan-daemon.sh`) que:
+- Mantém a ventoinha **forçadamente desligada** via EC enquanto a temperatura está baixa
+- Liga automaticamente (entrega ao BIOS) ao cruzar o limite de temperatura
+- Desliga novamente quando a temperatura cai (hysteresis de 10°C evita liga/desliga rápido)
+- Em caso de falha na leitura de temperatura (3x seguidas), entrega controle ao BIOS por segurança
+
+| Modo | Ventoinha liga em | Ventoinha desliga em | Governor |
+|---|---|---|---|
+| 🔇 Silencioso | 65°C | 55°C | power-saver |
+| 🔇+ Silencioso+ | 70°C | 60°C | balanced |
+
+**Benchmark medido (5 milhões de operações float):**
+
+| Modo | Tempo | Frequência |
+|---|---|---|
+| Silencioso / Economia | ~3300–3500 ms | 900 MHz fixo |
+| Silencioso+ / Balanceado | ~742 ms | 800–3800 MHz dinâmico |
+| Performance | ~755 ms | 4200+ MHz |
+
+O **Silencioso+** entrega a mesma performance do Balanceado com ventoinha silenciosa  
+durante uso típico (browser, código, terminal), ligando apenas em cargas sustentadas.
 
 ---
 
@@ -47,9 +73,12 @@ sobreposto a qualquer janela inclusive em tela cheia.
 |---|---|
 | `install.sh` | Instalador automático |
 | `nitro-listener.py` | Monitora `/dev/input/event4`, detecta keycode 425, chama o menu |
-| `nitro-menu.sh` | Cicla entre perfis, exibe OSD GTK, controla ventoinha |
+| `nitro-menu.sh` | Cicla entre os 5 perfis, exibe OSD GTK, controla ventoinha |
 | `ec-fan.sh` | Escreve nos registros do EC para controlar velocidade das ventoinhas |
+| `nitro-fan-daemon.sh` | Daemon de controle térmico — monitoramento contínuo de temperatura |
 | `nitro-key.service` | Serviço systemd — inicia o listener automaticamente no login |
+| `nitro-fan-silent.service` | Serviço systemd para o modo Silencioso |
+| `nitro-fan-silent-balanced.service` | Serviço systemd para o modo Silencioso+ |
 
 O binário `ec_probe` é compilado durante a instalação a partir do  
 [nbfc-linux](https://github.com/nbfc-linux/nbfc-linux) e salvo em `~/nitro-key/ec_probe`.
@@ -87,7 +116,8 @@ documentados do AN517-55. Confirmados testando escrita ao vivo:
 |---|---|---|---|
 | Turbo | `0x1B` | `0x40` (64) | `0x08` (8) |
 | Médio | `0x1B` | `0x20` (32) | `0x04` (4) |
-| Auto | `0x00` | `0x00` | `0x00` |
+| Auto (BIOS) | `0x00` | `0x00` | `0x00` |
+| Silent (desligada) | `0x1B` | `0x00` | `0x00` |
 
 ---
 
@@ -107,8 +137,10 @@ O `install.sh` também aplica tuning de kernel em `/etc/sysctl.d/99-performance.
 ## Comandos úteis
 
 ```bash
-# Status do serviço
+# Status dos serviços
 systemctl --user status nitro-key
+systemctl status nitro-fan-silent.service
+systemctl status nitro-fan-silent-balanced.service
 
 # Reiniciar após mudanças nos scripts
 systemctl --user restart nitro-key
@@ -117,9 +149,11 @@ systemctl --user restart nitro-key
 journalctl --user -u nitro-key -f
 
 # Controle manual da ventoinha
-sudo ~/nitro-key/ec-fan.sh turbo   # máximo
-sudo ~/nitro-key/ec-fan.sh mid     # metade
-sudo ~/nitro-key/ec-fan.sh auto    # automático (BIOS)
+sudo ~/nitro-key/ec-fan.sh turbo    # máximo
+sudo ~/nitro-key/ec-fan.sh mid      # metade
+sudo ~/nitro-key/ec-fan.sh auto     # automático (BIOS)
+sudo ~/nitro-key/ec-fan.sh silent   # desligada até 65°C (power-saver)
+sudo ~/nitro-key/ec-fan.sh silent+  # desligada até 70°C (balanced)
 
 # Ler registros do EC
 sudo ~/nitro-key/ec_probe read 0x03   # modo (0x00=auto, 0x1B=manual)
